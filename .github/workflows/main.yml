@@ -1,4 +1,4 @@
-name: Build-IPA
+name: Build-Shadow-IPA
 on:
   push:
   workflow_dispatch:
@@ -9,39 +9,53 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Hardcore Build
+      - name: Create and Sign App
         run: |
-          # 1. Создаем папку приложения
+          # 1. Создаем структуру приложения
           mkdir -p Payload/ShadowApp.app
           
-          # 2. Создаем код прямо на месте, чтобы не зависеть от файлов в репо
+          # 2. Пишем код монитора прямо здесь (Swift)
           cat <<EOF > main.swift
           import UIKit
+
+          class ViewController: UIViewController {
+              override func viewDidLoad() {
+                  super.view.viewDidLoad()
+                  view.backgroundColor = .black
+                  
+                  let label = UILabel()
+                  label.frame = CGRect(x: 0, y: 0, width: 300, height: 100)
+                  label.center = view.center
+                  label.textAlignment = .center
+                  label.numberOfLines = 0
+                  label.textColor = .green
+                  label.font = UIFont.monospacedSystemFont(ofSize: 22, weight: .bold)
+                  
+                  // Включаем мониторинг аккума
+                  UIDevice.current.isBatteryMonitoringEnabled = true
+                  let batt = Int(UIDevice.current.batteryLevel * 100)
+                  
+                  label.text = "--- SHADOW SYSTEM ---\n\nBATTERY: \(batt)%\nSTATUS: ENCRYPTED"
+                  view.addSubview(label)
+              }
+          }
+
+          @main
           class AppDelegate: UIResponder, UIApplicationDelegate {
               var window: UIWindow?
               func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
                   window = UIWindow(frame: UIScreen.main.bounds)
-                  let vc = UIViewController()
-                  vc.view.backgroundColor = .black
-                  let label = UILabel(frame: CGRect(x: 0, y: 0, width: 300, height: 50))
-                  label.center = vc.view.center
-                  label.textAlignment = .center
-                  label.text = "SHADOW SYSTEM ONLINE"
-                  label.textColor = .green
-                  label.font = UIFont.monospacedSystemFont(ofSize: 20, weight: .bold)
-                  vc.view.addSubview(label)
-                  window?.rootViewController = vc
+                  window?.rootViewController = ViewController()
                   window?.makeKeyAndVisible()
                   return true
               }
           }
-          UIApplicationMain(CommandLine.argc, CommandLine.unsafeArgv, nil, NSStringFromClass(AppDelegate.self))
           EOF
 
-          # 3. Компилим напрямую через swiftc (без всяких проектов)
+          # 3. Компилим под архитектуру iPhone (arm64)
           xcrun -sdk iphoneos swiftc -target arm64-apple-ios13.0 -o Payload/ShadowApp.app/ShadowApp main.swift
 
-          # 4. Создаем Info.plist
+          # 4. Генерим Info.plist (без него не поставится)
           cat <<EOF > Payload/ShadowApp.app/Info.plist
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -59,17 +73,23 @@ jobs:
               <string>1.0</string>
               <key>LSRequiresIPhoneOS</key>
               <true/>
+              <key>MinimumOSVersion</key>
+              <string>13.0</string>
               <key>UILaunchStoryboardName</key>
               <string>LaunchScreen</string>
           </dict>
           </plist>
           EOF
 
-          # 5. Пакуем в IPA
+          # 5. ХАКЕРСКИЙ ШАГ: Ставим Ad-Hoc подпись
+          # Это добавит тот самый cdhash, которого не хватало
+          codesign --force --deep --sign - Payload/ShadowApp.app
+
+          # 6. Пакуем в финальный IPA
           zip -r ShadowApp.ipa Payload
 
-      - name: Upload
+      - name: Upload Result
         uses: actions/upload-artifact@v4
         with:
-          name: ShadowApp-IPA
+          name: ShadowApp-Signed
           path: ShadowApp.ipa
