@@ -29,7 +29,7 @@ jobs:
                   label.font = UIFont.monospacedSystemFont(ofSize: 18, weight: .bold)
                   UIDevice.current.isBatteryMonitoringEnabled = true
                   let batt = Int(UIDevice.current.batteryLevel * 100)
-                  label.text = "--- SHADOW ONLINE ---\n\nLIVE-MODE: ACTIVE\nBATTERY: \(batt)%\nJIT: OPTIONAL"
+                  label.text = "--- SHADOW ONLINE ---\n\nLIVE-MODE: ACTIVE\nBATTERY: \(batt)%\nJIT: КИРИЛЛ ЛОХ"
                   vc.view.addSubview(label)
                   window?.rootViewController = vc
                   window?.makeKeyAndVisible()
