@@ -1,7 +1,7 @@
 name: Build-IPA
 on:
   push:
-  workflow_dispatch: # Та самая кнопка
+  workflow_dispatch:
 
 jobs:
   build:
@@ -9,23 +9,39 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Create Project and Build
+      - name: Hardcore Build
         run: |
-          # 1. Создаем структуру папок
-          mkdir -p ShadowApp/Payload
-          
-          # 2. Генерим минимальный проект через Swift Package Manager (так проще всего без Xcode)
-          swift package init --type executable --name ShadowApp
-          
-          # 3. Компилим под iOS (используем упрощенный метод для создания .app)
-          # В реале тут должен быть xcodebuild, но для теста соберем бинарник
-          swift build -c release --triple arm64-apple-ios
-          
-          # 4. Собираем структуру IPA
+          # 1. Создаем папку приложения
           mkdir -p Payload/ShadowApp.app
-          cp .build/arm64-apple-ios/release/ShadowApp Payload/ShadowApp.app/ShadowApp
           
-          # Создаем базовый Info.plist, чтобы iOS поняла, что это за прога
+          # 2. Создаем код прямо на месте, чтобы не зависеть от файлов в репо
+          cat <<EOF > main.swift
+          import UIKit
+          class AppDelegate: UIResponder, UIApplicationDelegate {
+              var window: UIWindow?
+              func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+                  window = UIWindow(frame: UIScreen.main.bounds)
+                  let vc = UIViewController()
+                  vc.view.backgroundColor = .black
+                  let label = UILabel(frame: CGRect(x: 0, y: 0, width: 300, height: 50))
+                  label.center = vc.view.center
+                  label.textAlignment = .center
+                  label.text = "SHADOW SYSTEM ONLINE"
+                  label.textColor = .green
+                  label.font = UIFont.monospacedSystemFont(ofSize: 20, weight: .bold)
+                  vc.view.addSubview(label)
+                  window?.rootViewController = vc
+                  window?.makeKeyAndVisible()
+                  return true
+              }
+          }
+          UIApplicationMain(CommandLine.argc, CommandLine.unsafeArgv, nil, NSStringFromClass(AppDelegate.self))
+          EOF
+
+          # 3. Компилим напрямую через swiftc (без всяких проектов)
+          xcrun -sdk iphoneos swiftc -target arm64-apple-ios13.0 -o Payload/ShadowApp.app/ShadowApp main.swift
+
+          # 4. Создаем Info.plist
           cat <<EOF > Payload/ShadowApp.app/Info.plist
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -43,14 +59,16 @@ jobs:
               <string>1.0</string>
               <key>LSRequiresIPhoneOS</key>
               <true/>
+              <key>UILaunchStoryboardName</key>
+              <string>LaunchScreen</string>
           </dict>
           </plist>
           EOF
-          
+
           # 5. Пакуем в IPA
           zip -r ShadowApp.ipa Payload
 
-      - name: Upload Artifact
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: ShadowApp-IPA
