@@ -1,4 +1,4 @@
-name: Build-Shadow
+name: Build-For-LiveContainer
 on:
   push:
   workflow_dispatch:
@@ -8,11 +8,11 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Build and Sign
+      - name: Build
         run: |
           mkdir -p Payload/ShadowApp.app
           
+          # 1. Код приложения
           cat <<EOF > main.swift
           import UIKit
           class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -21,19 +21,15 @@ jobs:
                   window = UIWindow(frame: UIScreen.main.bounds)
                   let vc = UIViewController()
                   vc.view.backgroundColor = .black
-                  
-                  let label = UILabel(frame: CGRect(x: 0, y: 0, width: 300, height: 150))
+                  let label = UILabel(frame: CGRect(x: 0, y: 0, width: 300, height: 200))
                   label.center = vc.view.center
                   label.textAlignment = .center
                   label.numberOfLines = 0
                   label.textColor = .green
-                  label.font = UIFont.monospacedSystemFont(ofSize: 20, weight: .bold)
-                  
+                  label.font = UIFont.monospacedSystemFont(ofSize: 18, weight: .bold)
                   UIDevice.current.isBatteryMonitoringEnabled = true
                   let batt = Int(UIDevice.current.batteryLevel * 100)
-                  
-                  label.text = "SHADOW SYSTEM\nONLINE\n\nBATTERY: \(batt)%"
-                  
+                  label.text = "--- SHADOW ONLINE ---\n\nLIVE-MODE: ACTIVE\nBATTERY: \(batt)%\nJIT: OPTIONAL"
                   vc.view.addSubview(label)
                   window?.rootViewController = vc
                   window?.makeKeyAndVisible()
@@ -43,8 +39,22 @@ jobs:
           UIApplicationMain(CommandLine.argc, CommandLine.unsafeArgv, nil, NSStringFromClass(AppDelegate.self))
           EOF
 
+          # 2. Создаем файл прав (Entitlements) - это ОЧЕНЬ важно для LiveContainer
+          cat <<EOF > entitlements.plist
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>get-task-allow</key>
+              <true/>
+          </dict>
+          </plist>
+          EOF
+
+          # 3. Компиляция
           xcrun -sdk iphoneos swiftc -target arm64-apple-ios13.0 -o Payload/ShadowApp.app/ShadowApp main.swift
 
+          # 4. Info.plist
           cat <<EOF > Payload/ShadowApp.app/Info.plist
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -53,7 +63,7 @@ jobs:
               <key>CFBundleExecutable</key>
               <string>ShadowApp</string>
               <key>CFBundleIdentifier</key>
-              <string>com.shadow.monitor</string>
+              <string>com.shadow.lc</string>
               <key>CFBundleName</key>
               <string>ShadowApp</string>
               <key>CFBundlePackageType</key>
@@ -66,12 +76,14 @@ jobs:
           </plist>
           EOF
 
-          codesign -s - --force --deep Payload/ShadowApp.app
+          # 5. Подписываем с правами
+          codesign -s - --force --entitlements entitlements.plist Payload/ShadowApp.app/ShadowApp
+          codesign -s - --force --entitlements entitlements.plist Payload/ShadowApp.app
 
           zip -r ShadowApp.ipa Payload
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: ShadowApp-Signed
+          name: ShadowApp-LC
           path: ShadowApp.ipa
