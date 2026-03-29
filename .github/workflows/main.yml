@@ -1,4 +1,4 @@
-name: Build-Shadow-IPA
+name: Build-Final-Test
 on:
   push:
   workflow_dispatch:
@@ -9,37 +9,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Create and Sign App
+      - name: Ultimate Build
         run: |
-          # 1. Создаем структуру приложения
+          # 1. Создаем папку
           mkdir -p Payload/ShadowApp.app
           
-          # 2. Пишем код монитора прямо здесь (Swift)
+          # 2. Самый простой Swift-код (без лишних наворотов)
           cat <<EOF > main.swift
           import UIKit
-
           class ViewController: UIViewController {
               override func viewDidLoad() {
                   super.view.viewDidLoad()
                   view.backgroundColor = .black
-                  
-                  let label = UILabel()
-                  label.frame = CGRect(x: 0, y: 0, width: 300, height: 100)
+                  let label = UILabel(frame: CGRect(x: 0, y: 0, width: 300, height: 100))
                   label.center = view.center
                   label.textAlignment = .center
-                  label.numberOfLines = 0
                   label.textColor = .green
-                  label.font = UIFont.monospacedSystemFont(ofSize: 22, weight: .bold)
-                  
-                  // Включаем мониторинг аккума
-                  UIDevice.current.isBatteryMonitoringEnabled = true
-                  let batt = Int(UIDevice.current.batteryLevel * 100)
-                  
-                  label.text = "--- SHADOW SYSTEM ---\n\nBATTERY: \(batt)%\nSTATUS: ENCRYPTED"
+                  label.text = "SHADOW SYSTEM\nONLINE"
+                  label.numberOfLines = 0
                   view.addSubview(label)
               }
           }
-
           @main
           class AppDelegate: UIResponder, UIApplicationDelegate {
               var window: UIWindow?
@@ -52,10 +42,11 @@ jobs:
           }
           EOF
 
-          # 3. Компилим под архитектуру iPhone (arm64)
-          xcrun -sdk iphoneos swiftc -target arm64-apple-ios13.0 -o Payload/ShadowApp.app/ShadowApp main.swift
+          # 3. Компиляция (с указанием пути к SDK)
+          SDK_PATH=\$(xcrun --show-sdk-path --sdk iphoneos)
+          xcrun -sdk iphoneos swiftc -target arm64-apple-ios13.0 -sdk \$SDK_PATH -o Payload/ShadowApp.app/ShadowApp main.swift
 
-          # 4. Генерим Info.plist (без него не поставится)
+          # 4. Минимальный Info.plist
           cat <<EOF > Payload/ShadowApp.app/Info.plist
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -64,7 +55,7 @@ jobs:
               <key>CFBundleExecutable</key>
               <string>ShadowApp</string>
               <key>CFBundleIdentifier</key>
-              <string>com.shadow.monitor</string>
+              <string>com.shadow.test</string>
               <key>CFBundleName</key>
               <string>ShadowApp</string>
               <key>CFBundlePackageType</key>
@@ -75,21 +66,19 @@ jobs:
               <true/>
               <key>MinimumOSVersion</key>
               <string>13.0</string>
-              <key>UILaunchStoryboardName</key>
-              <string>LaunchScreen</string>
           </dict>
           </plist>
           EOF
 
-          # 5. ХАКЕРСКИЙ ШАГ: Ставим Ad-Hoc подпись
-          # Это добавит тот самый cdhash, которого не хватало
-          codesign --force --deep --sign - Payload/ShadowApp.app
+          # 5. Псевдо-подпись (чтобы не было cdhash error)
+          codesign -s - --force Payload/ShadowApp.app/ShadowApp
+          codesign -s - --force Payload/ShadowApp.app
 
-          # 6. Пакуем в финальный IPA
+          # 6. Упаковка
           zip -r ShadowApp.ipa Payload
 
-      - name: Upload Result
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: ShadowApp-Signed
+          name: ShadowApp-IPA
           path: ShadowApp.ipa
